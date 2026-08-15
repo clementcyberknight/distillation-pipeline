@@ -369,7 +369,7 @@ class DatasetValidator:
         # 4. Strict Pydantic Schema Validation
         try:
             validated_obj = model_cls.model_validate(response)
-            cleaned_response = validated_obj.model_dump()
+            cleaned_response = validated_obj.model_dump(mode="json")
         except ValidationError as e:
             error_details = "; ".join(f"{err['loc']}: {err['msg']}" for err in e.errors())
             return ValidationResult(

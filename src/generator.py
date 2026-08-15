@@ -79,6 +79,24 @@ class LlamaCppGenerator(BaseGenerator):
             verbose=verbose,
         )
 
+        self._grammar_cache: Dict[str, Any] = {}
+        if LlamaGrammar is not None:
+            for out_type, schema_def in OUTPUT_SCHEMAS.items():
+                wrapper_schema = {
+                    "type": "object",
+                    "required": ["user_query", "response"],
+                    "properties": {
+                        "user_query": {"type": "string", "minLength": 5},
+                        "response": schema_def,
+                    },
+                }
+                try:
+                    self._grammar_cache[out_type] = LlamaGrammar.from_json_schema(
+                        json.dumps(wrapper_schema)
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to compile grammar for {out_type}: {e}")
+
     def _build_prompt(
         self,
         output_type: str,
@@ -124,7 +142,7 @@ class LlamaCppGenerator(BaseGenerator):
         prompt = (
             f"<|im_start|>system\n{system_instruction}<|im_end|>\n"
             f"<|im_start|>user\n{user_content}<|im_end|>\n"
-            f"<|im_start|>assistant\n```json\n"
+            f"<|im_start|>assistant\n"
         )
         return prompt
 
@@ -138,10 +156,8 @@ class LlamaCppGenerator(BaseGenerator):
         """Invokes Llama.cpp with dynamic temperature and context."""
         prompt = self._build_prompt(output_type, domain_context, seed_examples)
 
-        schema_def = OUTPUT_SCHEMAS.get(output_type, {})
-        grammar = None
-        if schema_def and HAS_LLAMA_CPP and LlamaGrammar is not None:
-            grammar = LlamaGrammar.from_json_schema(json.dumps(schema_def))
+        # Use pre-compiled grammar from cache
+        grammar = self._grammar_cache.get(output_type)
 
         output = self.llm(
             prompt,
@@ -150,17 +166,13 @@ class LlamaCppGenerator(BaseGenerator):
             top_p=0.90,
             repeat_penalty=1.1,
             grammar=grammar,
-            stop=["<|im_end|>", "```\n\n", "<|im_start|>"],
+            # No "```\n\n" stop token — grammar handles termination,
+            # and that pattern prematurely truncates DOCUMENT_OUTPUT markdown.
+            stop=["<|im_end|>", "<|im_start|>"],
             echo=False,
         )
 
-        text = output["choices"][0]["text"].strip()
-        # Add back json fence if needed for cleaner extraction
-        if not text.startswith("```json") and not text.startswith("{"):
-            text = "```json\n" + text
-        if text.endswith("```"):
-            pass
-        return text
+        return output["choices"][0]["text"].strip()
 
     def close(self) -> None:
         if hasattr(self, "llm") and self.llm:
