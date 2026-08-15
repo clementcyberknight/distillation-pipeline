@@ -13,9 +13,6 @@ import argparse
 import os
 import signal
 import sys
-import time
-from pathlib import Path
-from typing import List
 
 from rich.console import Console
 from rich.panel import Panel
@@ -189,8 +186,8 @@ def main():
     # 3. Resume & Existing Record Inspection
     existing_counts = {}
     if args.resume:
-        existing_counts = writer.get_existing_records()
-        loaded_existing = writer.populate_validator_from_existing(validator)
+        existing_counts = writer.get_existing_records_and_populate(validator)
+        loaded_existing = sum(existing_counts.values())
         if loaded_existing > 0:
             console.print(f"[bold cyan]Resuming pipeline:[/bold cyan] Detected {loaded_existing} existing records in {args.output_file}")
             for s_name, count in existing_counts.items():
@@ -247,6 +244,7 @@ def main():
             writer.display_summary_table()
             if generator:
                 generator.close()
+            writer.close()
             sys.exit(0)
 
         signal.signal(signal.SIGINT, handle_sigint)
@@ -308,6 +306,7 @@ def main():
     finally:
         if generator:
             generator.close()
+        writer.close()
 
     # 7. Print Final Metrics Summary
     writer.display_summary_table()

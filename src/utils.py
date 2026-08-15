@@ -2,16 +2,13 @@
 
 import json
 import logging
-import os
-import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from rich.console import Console
 from rich.logging import RichHandler
-from rich.panel import Panel
 from rich.table import Table
 
 from config.schemas_and_seeds import SYSTEM_PROMPT
@@ -101,9 +98,11 @@ class DatasetWriter:
         self.quarantine_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.stats = GenerationStats()
+        self.output_file_handle = open(self.output_path, "a", encoding="utf-8")
+        self.quarantine_file_handle = open(self.quarantine_path, "a", encoding="utf-8")
 
-    def get_existing_records(self) -> Dict[str, int]:
-        """Reads existing output file (if any) and returns count of valid items per schema."""
+    def get_existing_records_and_populate(self, validator: Any) -> Dict[str, int]:
+        """Reads existing output file and returns counts while populating deduplication index."""
         counts: Dict[str, int] = {}
         if not self.output_path.exists():
             return counts
@@ -116,6 +115,9 @@ class DatasetWriter:
                         continue
                     try:
                         obj = json.loads(line)
+                        q = obj.get("user_query")
+                        if q:
+                            validator.dedup_manager.add(q)
                         resp = obj.get("response", {})
                         out_type = resp.get("output_type")
                         if out_type:
@@ -127,31 +129,6 @@ class DatasetWriter:
 
         return counts
 
-    def populate_validator_from_existing(self, validator: Any) -> int:
-        """Loads all existing queries from output file into validator dedup index."""
-        if not self.output_path.exists():
-            return 0
-
-        loaded = 0
-        try:
-            with open(self.output_path, "r", encoding="utf-8") as f:
-                for line in f:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        obj = json.loads(line)
-                        q = obj.get("user_query")
-                        if q:
-                            validator.dedup_manager.add(q)
-                            loaded += 1
-                    except json.JSONDecodeError:
-                        continue
-        except Exception as e:
-            logger.warning(f"Failed to populate deduplication index from existing dataset: {e}")
-
-        return loaded
-
     def write_sample(self, user_query: str, response: Dict[str, Any]) -> None:
         """Write a single validated item in the unified fine-tuning format."""
         entry = {
@@ -159,9 +136,8 @@ class DatasetWriter:
             "user_query": user_query,
             "response": response,
         }
-        with open(self.output_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            f.flush()
+        self.output_file_handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        self.output_file_handle.flush()
 
         output_type = response.get("output_type", "UNKNOWN")
         self.stats.record_valid(output_type)
@@ -181,11 +157,16 @@ class DatasetWriter:
             "error_reason": error_reason or "Unspecified error",
             "raw_output": raw_output,
         }
-        with open(self.quarantine_path, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
-            f.flush()
+        self.quarantine_file_handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        self.quarantine_file_handle.flush()
 
         self.stats.record_rejection(error_code or "UNKNOWN")
+
+    def close(self):
+        if hasattr(self, "output_file_handle") and self.output_file_handle:
+            self.output_file_handle.close()
+        if hasattr(self, "quarantine_file_handle") and self.quarantine_file_handle:
+            self.quarantine_file_handle.close()
 
     def display_summary_table(self) -> None:
         """Render a formatted summary table of the generation run."""

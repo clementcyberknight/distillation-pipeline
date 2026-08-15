@@ -4,10 +4,10 @@ llama-cpp-python>=0.2.89
 # Data Validation & Serialization
 pydantic>=2.7.0
 rapidfuzz>=3.8.0
+json-repair>=0.30.0
 
 # CLI & Formatting
 rich>=13.7.0
-click>=8.1.7
 
 # Testing
 pytest>=8.0.0

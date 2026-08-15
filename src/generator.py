@@ -10,11 +10,9 @@ Orchestrates:
 import json
 import logging
 import random
-import time
 from typing import Any, Dict, Generator, List, Optional
 
 from config.schemas_and_seeds import (
-    BUSINESS_VERTICALS,
     DOMAIN_CONTEXTS,
     OUTPUT_SCHEMAS,
     SEED_EXAMPLES,
@@ -26,11 +24,12 @@ from src.validator import DatasetValidator, ValidationResult
 logger = logging.getLogger("distillation.generator")
 
 try:
-    from llama_cpp import Llama
+    from llama_cpp import Llama, LlamaGrammar
     HAS_LLAMA_CPP = True
 except ImportError:
     HAS_LLAMA_CPP = False
     Llama = None
+    LlamaGrammar = None
 
 
 class BaseGenerator:
@@ -89,8 +88,8 @@ class LlamaCppGenerator(BaseGenerator):
         """Constructs ChatML formatted generation prompt with few-shot seeds and schema definitions."""
         schema_def = OUTPUT_SCHEMAS.get(output_type, {})
 
-        # Select 2 distinct seed examples for few-shot guidance
-        sample_seeds = random.sample(seed_examples, min(2, len(seed_examples)))
+        # Use a fixed slice for few-shot guidance to allow KV Prefix Caching across batches
+        sample_seeds = seed_examples[:2]
 
         few_shot_text = ""
         for i, seed in enumerate(sample_seeds, 1):
@@ -139,12 +138,18 @@ class LlamaCppGenerator(BaseGenerator):
         """Invokes Llama.cpp with dynamic temperature and context."""
         prompt = self._build_prompt(output_type, domain_context, seed_examples)
 
+        schema_def = OUTPUT_SCHEMAS.get(output_type, {})
+        grammar = None
+        if schema_def and HAS_LLAMA_CPP and LlamaGrammar is not None:
+            grammar = LlamaGrammar.from_json_schema(json.dumps(schema_def))
+
         output = self.llm(
             prompt,
             max_tokens=1024,
             temperature=temperature,
             top_p=0.90,
             repeat_penalty=1.1,
+            grammar=grammar,
             stop=["<|im_end|>", "```\n\n", "<|im_start|>"],
             echo=False,
         )

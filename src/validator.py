@@ -10,6 +10,7 @@ Provides:
 import json
 import logging
 import re
+import datetime
 from dataclasses import dataclass
 from typing import Any, Dict, List, Literal, Optional, Set, Tuple, Union
 from pydantic import BaseModel, Field, ValidationError, field_validator
@@ -20,7 +21,13 @@ logger = logging.getLogger("distillation.validator")
 
 # Fuzzy matching support (RapidFuzz with difflib fallback)
 try:
-    from rapidfuzz import fuzz
+    import json_repair
+    HAS_JSON_REPAIR = True
+except ImportError:
+    HAS_JSON_REPAIR = False
+
+try:
+    from rapidfuzz import process, fuzz
     HAS_RAPIDFUZZ = True
 except ImportError:
     import difflib
@@ -46,9 +53,11 @@ class ChartData(BaseModel):
         return [str(item) for item in v]
 
 
+ChartType = Literal["bar", "line", "pie", "doughnut", "radar", "scatter", "area"]
+
 class GenerativeChartPayload(BaseModel):
     output_type: Literal["GENERATIVE_CHART"] = "GENERATIVE_CHART"
-    chart_type: Literal["bar", "line", "pie", "doughnut", "radar", "scatter", "area"]
+    chart_type: ChartType
     title: str = Field(..., min_length=2)
     summary: str = Field(..., min_length=10)
     data: ChartData
@@ -91,7 +100,7 @@ class ShiftEntry(BaseModel):
 
 class ShiftSchedulePayload(BaseModel):
     output_type: Literal["SHIFT_SCHEDULE"] = "SHIFT_SCHEDULE"
-    week_starting: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    week_starting: datetime.date
     schedule: List[ShiftEntry] = Field(..., min_length=1)
 
 
@@ -99,7 +108,7 @@ class ProductivityChartPayload(BaseModel):
     output_type: Literal["PRODUCTIVITY_CHART"] = "PRODUCTIVITY_CHART"
     employee_name: str = Field(..., min_length=2)
     period: str = Field(..., min_length=2)
-    chart_type: Literal["bar", "line", "pie", "radar", "area"] = "line"
+    chart_type: ChartType = "line"
     data: ChartData
     summary: str = Field(..., min_length=10)
 
@@ -119,7 +128,7 @@ class AutoTaskPayload(BaseModel):
     task_title: str = Field(..., min_length=3)
     priority: Literal["LOW", "MEDIUM", "HIGH", "URGENT"] = "MEDIUM"
     assignee_role: str = Field(..., min_length=2)
-    due_date: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    due_date: datetime.date
     subtasks: List[str] = Field(..., min_length=1)
 
 
@@ -172,6 +181,14 @@ def clean_and_extract_json(raw_text: str) -> Optional[Dict[str, Any]]:
         except json.JSONDecodeError:
             cleaned = extracted
 
+    if HAS_JSON_REPAIR:
+        try:
+            res = json_repair.loads(cleaned)
+            if isinstance(res, dict):
+                return res
+        except Exception:
+            pass
+
     # 2. Try direct parsing
     try:
         return json.loads(cleaned)
@@ -187,12 +204,7 @@ def clean_and_extract_json(raw_text: str) -> Optional[Dict[str, Any]]:
         try:
             return json.loads(json_candidate)
         except json.JSONDecodeError:
-            # Try minor JSON repairs (e.g. trailing commas before } or ])
-            repaired = re.sub(r",\s*([\]}])", r"\1", json_candidate)
-            try:
-                return json.loads(repaired)
-            except json.JSONDecodeError:
-                pass
+            pass
 
     return None
 
@@ -227,11 +239,25 @@ class DeduplicationManager:
         if norm in self.exact_seen:
             return True, "Exact duplicate"
 
-        # Check fuzzy match against stored corpus
-        for existing in self.corpus:
-            similarity = self._compute_similarity(norm, existing)
-            if similarity >= self.fuzzy_threshold:
-                return True, f"Fuzzy match ({similarity:.2f} >= {self.fuzzy_threshold}): '{existing}'"
+        if not self.corpus:
+            return False, None
+
+        if HAS_RAPIDFUZZ:
+            match = process.extractOne(
+                norm,
+                self.corpus,
+                scorer=fuzz.ratio,
+                score_cutoff=self.fuzzy_threshold * 100.0
+            )
+            if match:
+                matched_str, score, _ = match
+                return True, f"Fuzzy match ({score/100:.2f} >= {self.fuzzy_threshold}): '{matched_str}'"
+        else:
+            # Check fuzzy match against stored corpus
+            for existing in self.corpus:
+                similarity = self._compute_similarity(norm, existing)
+                if similarity >= self.fuzzy_threshold:
+                    return True, f"Fuzzy match ({similarity:.2f} >= {self.fuzzy_threshold}): '{existing}'"
 
         return False, None
 

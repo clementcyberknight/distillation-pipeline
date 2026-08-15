@@ -5,14 +5,17 @@
 # ==============================================================================
 
 set -euo pipefail
-cd /root/africa-deep
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${SCRIPT_DIR}"
+export PYTHONPATH="${SCRIPT_DIR}"
 
 # Ensure virtualenv is loaded
-source venv/bin/activate
+if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+fi
 
-LOG_FILE="/root/africa-deep/pipeline.log"
-PID_FILE="/root/africa-deep/pipeline.pid"
-MODEL_FILE="/root/africa-deep/models/qwen2.5-7b-instruct-q4_k_m.gguf"
+MODEL_FILE="${SCRIPT_DIR}/models/qwen2.5-7b-instruct-q4_k_m.gguf"
 MODEL_URL="https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf"
 
 echo "================================================================="
@@ -33,7 +36,7 @@ fi
 echo "[2/2] Launching Distillation Pipeline (1,000 samples per format, batches of 20, 5 CPU threads)..."
 python3 -u run_pipeline.py \
   --model-path "${MODEL_FILE}" \
-  --output-file /root/africa-deep/distillation_dataset.jsonl \
+  --output-file "${SCRIPT_DIR}/distillation_dataset.jsonl" \
   --samples-per-schema 1000 \
   --batch-size 20 \
   --threads 5 \

@@ -7,7 +7,7 @@ This module defines:
 """
 
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 SYSTEM_PROMPT = "You are a desktop business assistant. Respond using the appropriate structured JSON output schema."
 
@@ -24,15 +24,6 @@ class OutputSchemaType(str, Enum):
     TOOL_CALL = "TOOL_CALL"
     ACTION_CONFIRMATION = "ACTION_CONFIRMATION"
 
-
-BUSINESS_VERTICALS = [
-    "Documents",
-    "POS",
-    "Inventory",
-    "Staff",
-    "Finance",
-    "Task Management",
-]
 
 DOMAIN_CONTEXTS = [
     {
