@@ -128,7 +128,7 @@ OUTPUT_SCHEMAS: Dict[str, Dict[str, Any]] = {
         "required": ["output_type", "week_starting", "schedule"],
         "properties": {
             "output_type": {"type": "string", "enum": ["SHIFT_SCHEDULE"]},
-            "week_starting": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+            "week_starting": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
             "schedule": {
                 "type": "array",
                 "items": {
@@ -195,7 +195,7 @@ OUTPUT_SCHEMAS: Dict[str, Dict[str, Any]] = {
             "task_title": {"type": "string"},
             "priority": {"type": "string", "enum": ["LOW", "MEDIUM", "HIGH", "URGENT"]},
             "assignee_role": {"type": "string"},
-            "due_date": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"},
+            "due_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
             "subtasks": {"type": "array", "items": {"type": "string"}},
         },
     },
