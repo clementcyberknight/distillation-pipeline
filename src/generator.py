@@ -54,9 +54,9 @@ class LlamaCppGenerator(BaseGenerator):
     def __init__(
         self,
         model_path: str,
-        n_threads: int = 5,
+        n_threads: int = 24,
         n_ctx: int = 4096,
-        n_batch: int = 512,
+        n_batch: int = 2048,
         n_gpu_layers: int = 0,
         verbose: bool = False,
     ):

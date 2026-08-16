@@ -47,8 +47,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--threads",
         type=int,
-        default=5,
-        help="Number of CPU threads for llama.cpp (5 out of 6 vCPUs to prevent OS throttling).",
+        default=24,
+        help="Number of CPU threads for llama.cpp (matches AMD EPYC 7443 physical cores).",
     )
     parser.add_argument(
         "--ctx-size",
@@ -59,8 +59,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--gpu-layers",
         type=int,
-        default=0,
-        help="Number of layers to offload to GPU (0 for pure CPU execution on VPS).",
+        default=100,
+        help="Number of layers to offload to GPU (100 for pure GPU execution on RTX 4090).",
     )
 
     # Generation & Batching Parameters
@@ -73,8 +73,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=20,
-        help="Batch size / set size per generation cycle (default: 20).",
+        default=50,
+        help="Batch size / set size per generation cycle (default: 50).",
     )
     parser.add_argument(
         "--min-temp",
