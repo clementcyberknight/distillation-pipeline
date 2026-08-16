@@ -1,6 +1,7 @@
 runpod_key
 runpod_key.pub
 distillation_dataset_backup.jsonl
+distillation_dataset.jsonl
 rejected_samples_backup.jsonl
 logs/
 __pycache__/

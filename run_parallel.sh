@@ -16,7 +16,16 @@ echo "=========================================================="
 echo " Starting Parallel Distillation Pipeline on RTX 4090"
 echo " Cores: 24 (6 threads/worker) | VRAM: 24GB (4 workers)"
 echo "=========================================================="
+echo "=========================================================="
 
+# Resume Support: Split existing master dataset into worker splits
+if [ -f "${FINAL_OUTPUT}" ]; then
+    echo "Resuming: Found existing ${FINAL_OUTPUT}, seeding workers..."
+    grep -E '"GENERATIVE_CHART"|"DOCUMENT_OUTPUT"|"CONVERSATIONAL_CHAT"' "${FINAL_OUTPUT}" > data_splits/dataset_w1.jsonl || true
+    grep -E '"DEEP_RESEARCH"|"SHIFT_SCHEDULE"|"PRODUCTIVITY_CHART"' "${FINAL_OUTPUT}" > data_splits/dataset_w2.jsonl || true
+    grep -E '"RED_FLAG_ALERT"|"AUTO_TASK"' "${FINAL_OUTPUT}" > data_splits/dataset_w3.jsonl || true
+    grep -E '"TOOL_CALL"|"ACTION_CONFIRMATION"' "${FINAL_OUTPUT}" > data_splits/dataset_w4.jsonl || true
+fi
 
 # Worker 1: 3 Schemas
 python3 run_pipeline.py \
@@ -26,7 +35,6 @@ python3 run_pipeline.py \
   --device gpu \
   --threads 6 \
   --batch-size 50 \
-  --no-resume \
   > logs/worker_1.log 2>&1 &
 P1=$!
 
@@ -38,7 +46,6 @@ python3 run_pipeline.py \
   --device gpu \
   --threads 6 \
   --batch-size 50 \
-  --no-resume \
   > logs/worker_2.log 2>&1 &
 P2=$!
 
@@ -50,7 +57,6 @@ python3 run_pipeline.py \
   --device gpu \
   --threads 6 \
   --batch-size 50 \
-  --no-resume \
   > logs/worker_3.log 2>&1 &
 P3=$!
 
@@ -62,7 +68,6 @@ python3 run_pipeline.py \
   --device gpu \
   --threads 6 \
   --batch-size 50 \
-  --no-resume \
   > logs/worker_4.log 2>&1 &
 P4=$!
 
