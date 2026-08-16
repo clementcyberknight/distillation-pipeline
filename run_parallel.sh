@@ -23,8 +23,8 @@ python3 run_pipeline.py \
   --schemas GENERATIVE_CHART DOCUMENT_OUTPUT CONVERSATIONAL_CHAT \
   --output-file data_splits/dataset_w1.jsonl \
   --quarantine-file data_splits/quarantine_w1.jsonl \
+  --device gpu \
   --threads 6 \
-  --gpu-layers 100 \
   --batch-size 50 \
   --no-resume \
   > logs/worker_1.log 2>&1 &
@@ -35,8 +35,8 @@ python3 run_pipeline.py \
   --schemas DEEP_RESEARCH SHIFT_SCHEDULE PRODUCTIVITY_CHART \
   --output-file data_splits/dataset_w2.jsonl \
   --quarantine-file data_splits/quarantine_w2.jsonl \
+  --device gpu \
   --threads 6 \
-  --gpu-layers 100 \
   --batch-size 50 \
   --no-resume \
   > logs/worker_2.log 2>&1 &
@@ -47,8 +47,8 @@ python3 run_pipeline.py \
   --schemas RED_FLAG_ALERT AUTO_TASK \
   --output-file data_splits/dataset_w3.jsonl \
   --quarantine-file data_splits/quarantine_w3.jsonl \
+  --device gpu \
   --threads 6 \
-  --gpu-layers 100 \
   --batch-size 50 \
   --no-resume \
   > logs/worker_3.log 2>&1 &
@@ -59,8 +59,8 @@ python3 run_pipeline.py \
   --schemas TOOL_CALL ACTION_CONFIRMATION \
   --output-file data_splits/dataset_w4.jsonl \
   --quarantine-file data_splits/quarantine_w4.jsonl \
+  --device gpu \
   --threads 6 \
-  --gpu-layers 100 \
   --batch-size 50 \
   --no-resume \
   > logs/worker_4.log 2>&1 &

@@ -45,10 +45,17 @@ def parse_arguments() -> argparse.Namespace:
         help="Path to downloaded GGUF teacher model weights on VPS.",
     )
     parser.add_argument(
+        "--device",
+        type=str,
+        choices=["cpu", "gpu"],
+        default="gpu",
+        help="Target hardware environment. Toggles GPU layers, thread counts, and flash attention.",
+    )
+    parser.add_argument(
         "--threads",
         type=int,
-        default=24,
-        help="Number of CPU threads for llama.cpp (matches AMD EPYC 7443 physical cores).",
+        default=None,
+        help="Number of CPU threads. Defaults to 24 for GPU, 5 for CPU.",
     )
     parser.add_argument(
         "--ctx-size",
@@ -59,8 +66,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--gpu-layers",
         type=int,
-        default=100,
-        help="Number of layers to offload to GPU (100 for pure GPU execution on RTX 4090).",
+        default=None,
+        help="Number of layers to offload to GPU. Defaults to 100 for GPU, 0 for CPU.",
     )
 
     # Generation & Batching Parameters
@@ -73,8 +80,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=50,
-        help="Batch size / set size per generation cycle (default: 50).",
+        default=None,
+        help="Batch size / set size per generation cycle. Defaults to 50 for GPU, 20 for CPU.",
     )
     parser.add_argument(
         "--min-temp",
@@ -143,6 +150,20 @@ def parse_arguments() -> argparse.Namespace:
 def main():
     args = parse_arguments()
     logger = setup_logger()
+
+    # Hardware Specific Defaults
+    if args.device == "cpu":
+        args.gpu_layers = args.gpu_layers if args.gpu_layers is not None else 0
+        args.threads = args.threads if args.threads is not None else 5
+        args.batch_size = args.batch_size if args.batch_size is not None else 20
+        flash_attn = False
+        logger.info(f"Running in CPU mode: gpu_layers={args.gpu_layers}, threads={args.threads}, batch_size={args.batch_size}")
+    else:
+        args.gpu_layers = args.gpu_layers if args.gpu_layers is not None else 100
+        args.threads = args.threads if args.threads is not None else 24
+        args.batch_size = args.batch_size if args.batch_size is not None else 50
+        flash_attn = True
+        logger.info(f"Running in GPU mode: gpu_layers={args.gpu_layers}, threads={args.threads}, batch_size={args.batch_size}, flash_attn=True")
 
     console.print(
         Panel.fit(
@@ -223,6 +244,7 @@ def main():
                 n_threads=args.threads,
                 n_ctx=args.ctx_size,
                 n_gpu_layers=args.gpu_layers,
+                flash_attn=flash_attn,
             )
 
         # 6. Initialize Batch Engine
