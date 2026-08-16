@@ -1,47 +1,97 @@
-#!/bin/bash
-# run_parallel.sh
-# Parallel execution script for the Synthetic Data Distillation Engine on RunPod (RTX 4090).
-# Splits the 10 schema formats across 4 concurrent python processes to fully saturate
-# the 24GB VRAM and 48 CPU threads.
+#!/usr/bin/env bash
+# ==============================================================================
+# Parallel Distillation Pipeline for NVIDIA RTX 4090 (24GB VRAM / 24 Physical Cores)
+# ==============================================================================
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "${SCRIPT_DIR}"
+
+mkdir -p logs data_splits
+
+FINAL_OUTPUT="distillation_dataset.jsonl"
+FINAL_QUARANTINE="logs/rejected_samples.jsonl"
 
 echo "=========================================================="
-echo "Starting Parallel Distillation Pipeline on RTX 4090"
+echo " Starting Parallel Distillation Pipeline on RTX 4090"
+echo " Cores: 24 (6 threads/worker) | VRAM: 24GB (4 workers)"
 echo "=========================================================="
 
-# Define schema batches for 4 workers
-WORKER_1_SCHEMAS="GENERATIVE_CHART DOCUMENT_OUTPUT CONVERSATIONAL_CHAT"
-WORKER_2_SCHEMAS="DEEP_RESEARCH SHIFT_SCHEDULE PRODUCTIVITY_CHART"
-WORKER_3_SCHEMAS="RED_FLAG_ALERT AUTO_TASK"
-WORKER_4_SCHEMAS="TOOL_CALL ACTION_CONFIRMATION"
 
-# Ensure log directory exists
-mkdir -p logs
-
-echo "Launching Worker 1: $WORKER_1_SCHEMAS"
-python3 run_pipeline.py --schemas $WORKER_1_SCHEMAS > logs/worker_1.log 2>&1 &
+# Worker 1: 3 Schemas
+python3 run_pipeline.py \
+  --schemas GENERATIVE_CHART DOCUMENT_OUTPUT CONVERSATIONAL_CHAT \
+  --output-file data_splits/dataset_w1.jsonl \
+  --quarantine-file data_splits/quarantine_w1.jsonl \
+  --threads 6 \
+  --gpu-layers 100 \
+  --batch-size 50 \
+  --no-resume \
+  > logs/worker_1.log 2>&1 &
 P1=$!
 
-echo "Launching Worker 2: $WORKER_2_SCHEMAS"
-python3 run_pipeline.py --schemas $WORKER_2_SCHEMAS > logs/worker_2.log 2>&1 &
+# Worker 2: 3 Schemas
+python3 run_pipeline.py \
+  --schemas DEEP_RESEARCH SHIFT_SCHEDULE PRODUCTIVITY_CHART \
+  --output-file data_splits/dataset_w2.jsonl \
+  --quarantine-file data_splits/quarantine_w2.jsonl \
+  --threads 6 \
+  --gpu-layers 100 \
+  --batch-size 50 \
+  --no-resume \
+  > logs/worker_2.log 2>&1 &
 P2=$!
 
-echo "Launching Worker 3: $WORKER_3_SCHEMAS"
-python3 run_pipeline.py --schemas $WORKER_3_SCHEMAS > logs/worker_3.log 2>&1 &
+# Worker 3: 2 Schemas
+python3 run_pipeline.py \
+  --schemas RED_FLAG_ALERT AUTO_TASK \
+  --output-file data_splits/dataset_w3.jsonl \
+  --quarantine-file data_splits/quarantine_w3.jsonl \
+  --threads 6 \
+  --gpu-layers 100 \
+  --batch-size 50 \
+  --no-resume \
+  > logs/worker_3.log 2>&1 &
 P3=$!
 
-echo "Launching Worker 4: $WORKER_4_SCHEMAS"
-python3 run_pipeline.py --schemas $WORKER_4_SCHEMAS > logs/worker_4.log 2>&1 &
+# Worker 4: 2 Schemas
+python3 run_pipeline.py \
+  --schemas TOOL_CALL ACTION_CONFIRMATION \
+  --output-file data_splits/dataset_w4.jsonl \
+  --quarantine-file data_splits/quarantine_w4.jsonl \
+  --threads 6 \
+  --gpu-layers 100 \
+  --batch-size 50 \
+  --no-resume \
+  > logs/worker_4.log 2>&1 &
 P4=$!
 
-echo "All workers launched successfully!"
-echo "Worker PIDs: $P1 $P2 $P3 $P4"
+echo "Worker 1 (PID $P1): GENERATIVE_CHART, DOCUMENT_OUTPUT, CONVERSATIONAL_CHAT"
+echo "Worker 2 (PID $P2): DEEP_RESEARCH, SHIFT_SCHEDULE, PRODUCTIVITY_CHART"
+echo "Worker 3 (PID $P3): RED_FLAG_ALERT, AUTO_TASK"
+echo "Worker 4 (PID $P4): TOOL_CALL, ACTION_CONFIRMATION"
 echo "=========================================================="
-echo "To monitor GPU usage, open another terminal and run: watch -n 1 nvidia-smi"
-echo "To view progress, run: tail -f logs/worker_*.log"
-echo "Waiting for all workers to finish..."
+echo "Monitoring: 'watch -n 1 nvidia-smi' | Logs: 'tail -f logs/worker_*.log'"
+echo "Waiting for workers to finish..."
 
+# Wait for all processes to complete
 wait $P1 $P2 $P3 $P4
 
 echo "=========================================================="
-echo "All workers completed!"
-echo "Combined dataset is in distillation_dataset.jsonl"
+echo "All workers finished! Merging split datasets..."
+
+# Atomic merge
+cat data_splits/dataset_w1.jsonl \
+    data_splits/dataset_w2.jsonl \
+    data_splits/dataset_w3.jsonl \
+    data_splits/dataset_w4.jsonl > "${FINAL_OUTPUT}"
+
+cat data_splits/quarantine_w1.jsonl \
+    data_splits/quarantine_w2.jsonl \
+    data_splits/quarantine_w3.jsonl \
+    data_splits/quarantine_w4.jsonl > "${FINAL_QUARANTINE}" 2>/dev/null || true
+
+TOTAL_LINES=$(wc -l < "${FINAL_OUTPUT}")
+echo "✓ Merge complete! Total generated training pairs: ${TOTAL_LINES}"
+echo "✓ Saved to: ${FINAL_OUTPUT}"
+echo "=========================================================="

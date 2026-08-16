@@ -54,21 +54,21 @@ class LlamaCppGenerator(BaseGenerator):
     def __init__(
         self,
         model_path: str,
-        n_threads: int = 24,
+        n_threads: int = 6,
         n_ctx: int = 4096,
         n_batch: int = 2048,
-        n_gpu_layers: int = 0,
+        n_gpu_layers: int = 100,
         verbose: bool = False,
     ):
         if not HAS_LLAMA_CPP:
             raise RuntimeError(
-                "llama-cpp-python is not installed. Please run `pip install llama-cpp-python` "
-                "or run the pipeline with `--mock`."
+                "llama-cpp-python is not installed. Please run with CUDA support: "
+                "`pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121`"
             )
 
         logger.info(
-            f"Initializing Llama model from '{model_path}' with n_threads={n_threads}, "
-            f"n_ctx={n_ctx}, n_batch={n_batch}, n_gpu_layers={n_gpu_layers}"
+            f"Initializing Llama on GPU from '{model_path}' (n_gpu_layers={n_gpu_layers}, "
+            f"n_threads={n_threads}, n_ctx={n_ctx}, flash_attn=True)"
         )
         self.llm = Llama(
             model_path=model_path,
@@ -76,6 +76,7 @@ class LlamaCppGenerator(BaseGenerator):
             n_ctx=n_ctx,
             n_batch=n_batch,
             n_gpu_layers=n_gpu_layers,
+            flash_attn=True,
             verbose=verbose,
         )
 
